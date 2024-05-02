@@ -19,7 +19,8 @@ int materia_fabrica = 0;
 int canetas_deposito = 0;
 int canetas_solicitadas = 0;
 int canetas_enviadas = 0;
-char solicitacao_comprador = '0';
+char permissao_controle = '0';
+char solicitacao_comprador = '1';
 
 pthread_mutex_t mutex_materia_deposito = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_materia_fabrica = PTHREAD_MUTEX_INITIALIZER;
@@ -31,6 +32,19 @@ pthread_cond_t deposito_canetas_cheio = PTHREAD_COND_INITIALIZER;
 pthread_cond_t deposito_canetas_livre = PTHREAD_COND_INITIALIZER;
 pthread_cond_t solicitacao_compra_canetas = PTHREAD_COND_INITIALIZER;
 
+void imprime_solicitacao_compra() {
+    if(canetas_enviadas) {
+        if(canetas_solicitadas) {
+            printf("%d caneta(s) comprada(s), resta(m) %d.\n", canetas_enviadas, canetas_solicitadas);
+        } else {
+            printf("%d caneta(s) comprada(s).\n", canetas_enviadas);
+        }
+     } else {
+        printf("Nao ha canetas em estoque no momento. Volte mais tarde!\n");
+     }
+}
+
+
 void* deposito_materia(void *thread_args) {
     time_t tempo_inicial = time(NULL);
 
@@ -38,11 +52,6 @@ void* deposito_materia(void *thread_args) {
         
         if((int) ((time(NULL) - tempo_inicial)) >= tempo_materia_entrega) {
             pthread_mutex_lock(&mutex_materia_fabrica);
-
-            while(canetas_deposito == capacidade_desposito_canetas) {
-                pthread_cond_wait(&deposito_canetas_cheio, &mutex_materia_fabrica);
-            }
-
             pthread_mutex_lock(&mutex_materia_deposito);
 
             materia_fabrica += minimo(materia_enviada_iteracao, materia_deposito);
@@ -68,11 +77,6 @@ void *fabrica_canetas(void *thread_args) {
             while(time(NULL) - tempo_inicial < tempo_fabricacao_caneta);
 
             pthread_mutex_lock(&mutex_materia_fabrica);
-
-            while(canetas_deposito == capacidade_desposito_canetas) {
-                pthread_cond_wait(&deposito_canetas_cheio, &mutex_materia_fabrica);
-            }
-
             pthread_mutex_lock(&mutex_canetas_deposito);
 
             materia_fabrica--;
@@ -84,20 +88,6 @@ void *fabrica_canetas(void *thread_args) {
     }
 
     pthread_exit(NULL);
-}
-
-void *deposito_canetas(void *thread_args) {
-    while(resta_estoque) {
-        pthread_mutex_lock(&mutex_espacos_disponiveis);
-
-        espacos_disponiveis = capacidade_desposito_canetas - canetas_deposito;
-
-        if(!espacos_disponiveis) {
-            pthread_cond_broadcast(&deposito_canetas_livre);
-        }
-
-        pthread_mutex_unlock(&mutex_espacos_disponiveis);
-    }
 }
 
 void *controle(void *thread_args) {
@@ -115,8 +105,43 @@ void *controle(void *thread_args) {
         }
 
         pthread_mutex_unlock(&mutex_materia_fabrica);
+        pthread_mutex_unlock(&mutex_espacos_disponiveis);
+    }
+}
+
+void *deposito_canetas(void *thread_args) {
+    while(resta_estoque) {
+        pthread_mutex_lock(&mutex_espacos_disponiveis);
+
+        espacos_disponiveis = capacidade_desposito_canetas - canetas_deposito;
+
+        if(!espacos_disponiveis) {
+            pthread_cond_broadcast(&deposito_canetas_livre);
+        }
 
         pthread_mutex_unlock(&mutex_espacos_disponiveis);
+
+        if(solicitacao_comprador == '2') {
+            pthread_mutex_lock(&mutex_canetas_deposito);
+
+            if(canetas_deposito >= canetas_solicitadas) {
+                canetas_enviadas = canetas_solicitadas;
+                canetas_deposito -= canetas_solicitadas;
+                canetas_solicitadas = 0;
+            }  else {
+                canetas_enviadas = canetas_deposito;
+                canetas_solicitadas -= canetas_deposito;
+                canetas_deposito = 0;
+            }
+
+            pthread_mutex_unlock(&mutex_canetas_deposito);
+            pthread_cond_broadcast(&deposito_canetas_cheio);
+
+            solicitacao_comprador = '0';
+
+            pthread_mutex_unlock(&mutex_impressao_mensagem);
+            pthread_cond_broadcast(&solicitacao_compra_canetas);
+        }
     }
 }
 
@@ -124,9 +149,9 @@ void *comprador(void *thread_args) {
     time_t tempo_inicial = time(NULL);
     
     while(resta_estoque) {
-        pthread_mutex_unlock(&mutex_impressao_mensagem);
+        pthread_mutex_lock(&mutex_impressao_mensagem);
 
-        while(solicitacao_comprador == '1') {
+        while(solicitacao_comprador != '1') {
             pthread_cond_wait(&solicitacao_compra_canetas, &mutex_impressao_mensagem);
         }
 
@@ -136,27 +161,7 @@ void *comprador(void *thread_args) {
             canetas_solicitadas = canetas_compradadas_por_solicitacao;
         }
 
-        pthread_mutex_lock(&mutex_canetas_deposito);
-
-        if(canetas_deposito >= canetas_solicitadas) {
-            canetas_enviadas = canetas_solicitadas;
-            canetas_deposito -= canetas_solicitadas;
-            canetas_solicitadas = 0;
-        }  else {
-            canetas_enviadas = canetas_deposito;
-            canetas_solicitadas -= canetas_deposito;
-            canetas_deposito = 0;
-        }
-
-        pthread_mutex_unlock(&mutex_canetas_deposito);
-
-        pthread_cond_broadcast(&deposito_canetas_cheio);
-
-        solicitacao_comprador = '1';
-
-        pthread_mutex_unlock(&mutex_impressao_mensagem);
-
-        pthread_cond_broadcast(&solicitacao_compra_canetas);
+        solicitacao_comprador = '2';
 
         tempo_inicial = time(NULL);
     }
@@ -200,13 +205,13 @@ int criador(void *thread_args) {
     while(resta_estoque) {
         pthread_mutex_lock(&mutex_impressao_mensagem);
 
-        while(solicitacao_comprador == '0') {
+        while(solicitacao_comprador != '0') {
             pthread_cond_wait(&solicitacao_compra_canetas, &mutex_impressao_mensagem);
         }
 
-        printf("%d caneta(s) comprada(s).\n", canetas_enviadas);
+        imprime_solicitacao_compra();
 
-        solicitacao_comprador = '0';
+        solicitacao_comprador = '1';
 
         pthread_mutex_unlock(&mutex_impressao_mensagem);
         pthread_cond_broadcast(&solicitacao_compra_canetas);
