@@ -19,7 +19,7 @@ int materia_fabrica = 0;
 int canetas_deposito = 0;
 int canetas_solicitadas = 0;
 int canetas_enviadas = 0;
-char permissao_controle = '0';
+char permissao_controle = '1';
 char solicitacao_comprador = '1';
 
 pthread_mutex_t mutex_materia_deposito = PTHREAD_MUTEX_INITIALIZER;
@@ -38,7 +38,7 @@ void imprime_solicitacao_compra() {
         if(canetas_solicitadas) {
             printf("%d caneta(s) comprada(s), resta(m) %d.\n", canetas_enviadas, canetas_solicitadas);
         } else {
-            printf("%d caneta(s) comprada(s).\n", canetas_enviadas);
+            printf("%d caneta(s) comprada(s), solicitação atendida.\n", canetas_enviadas);
         }
      } else {
         printf("Nao ha canetas em estoque no momento. Volte mais tarde!\n");
