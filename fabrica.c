@@ -58,6 +58,7 @@ void* deposito_materia(void *thread_args) {
     pthread_exit(NULL);
 }
 
+
 void *fabrica_canetas(void *thread_args) {
     time_t tempo_inicial;
 
