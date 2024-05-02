@@ -19,7 +19,6 @@ int materia_fabrica = 0;
 int canetas_deposito = 0;
 int canetas_solicitadas = 0;
 int canetas_enviadas = 0;
-char permissao_controle = '0';
 char solicitacao_comprador = '1';
 
 pthread_mutex_t mutex_materia_deposito = PTHREAD_MUTEX_INITIALIZER;
