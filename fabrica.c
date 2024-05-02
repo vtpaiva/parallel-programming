@@ -3,14 +3,15 @@
 #include <pthread.h>
 
 #define resta_estoque (materia_deposito || materia_fabrica || canetas_deposito)
+#define minimo(x, y) ((x > y) ? y : x)
 
 int estoque_materia_prima = 10;
 int tempo_materia_entrega = 1;
 int tempo_fabricacao_caneta = 1;
 int tempo_solicitacao_comprador = 1;
-int canetas_compradadas_por_solicitacao = 3;
-int capacidade_desposito_canetas = 3;
-int materia_enviada_iteracao = 1;
+int canetas_compradadas_por_solicitacao = 5;
+int capacidade_desposito_canetas = 1;
+int materia_enviada_iteracao = 4;
 
 int materia_deposito;
 int materia_fabrica = 0;
@@ -20,7 +21,6 @@ int canetas_solicitadas = 0;
 pthread_mutex_t mutex_materia_deposito = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_materia_fabrica = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_canetas_deposito = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_da_maluquice = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_cond_t deposito_canetas_cheio = PTHREAD_COND_INITIALIZER;
 
@@ -28,19 +28,22 @@ void* deposito_materia(void *thread_args) {
     time_t tempo_inicial = time(NULL);
 
     while(materia_deposito) {
-        while(canetas_deposito == capacidade_desposito_canetas) {
-            pthread_cond_wait(&deposito_canetas_cheio, &mutex_da_maluquice);
-        }
-
-        if((int) (time(NULL) - tempo_inicial) >= tempo_materia_entrega) {
-            pthread_mutex_lock(&mutex_materia_deposito);
+        printf("%d %d %d\n", materia_deposito, materia_fabrica, canetas_deposito);
+        
+        if((int) ((time(NULL) - tempo_inicial)) >= tempo_materia_entrega) {
             pthread_mutex_lock(&mutex_materia_fabrica);
 
-            materia_deposito -= materia_enviada_iteracao;
-            materia_fabrica += materia_enviada_iteracao;
+            while(canetas_deposito == capacidade_desposito_canetas) {
+                pthread_cond_wait(&deposito_canetas_cheio, &mutex_materia_fabrica);
+            }
 
-            pthread_mutex_unlock(&mutex_materia_fabrica);
+            pthread_mutex_lock(&mutex_materia_deposito);
+
+            materia_fabrica += minimo(materia_enviada_iteracao, materia_deposito);
+            materia_deposito -= minimo(materia_enviada_iteracao, materia_deposito);
+
             pthread_mutex_unlock(&mutex_materia_deposito);
+            pthread_mutex_unlock(&mutex_materia_fabrica);
 
             tempo_inicial = time(NULL);
         }
@@ -53,16 +56,16 @@ void *fabrica_canetas(void *thread_args) {
     time_t tempo_inicial;
 
     while(materia_deposito || materia_fabrica) {
-        while(canetas_deposito == capacidade_desposito_canetas) {
-            pthread_cond_wait(&deposito_canetas_cheio, &mutex_da_maluquice);
-        }
-
         if(materia_fabrica) {
             tempo_inicial = time(NULL);
 
             while(time(NULL) - tempo_inicial < tempo_fabricacao_caneta);
 
             pthread_mutex_lock(&mutex_materia_fabrica);
+
+            while(canetas_deposito >= capacidade_desposito_canetas) {
+                pthread_cond_wait(&deposito_canetas_cheio, &mutex_materia_fabrica);
+            }
             pthread_mutex_lock(&mutex_canetas_deposito);
 
             materia_fabrica--;
