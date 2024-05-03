@@ -1,7 +1,7 @@
 all:
-	gcc -o exec fabrica.c -lpthread
+	gcc -o exec fabrica_entrada.c -lpthread
 run:
-	./exec
+	./exec 20 5 3 1 8 4 6
 
 aleatorio:
 	@rm -f aleatorio.in
