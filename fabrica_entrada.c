@@ -25,6 +25,7 @@ execute o programa com ./exec
 #define FALSE '\0'
 #define TRUE '1'
 #define ERRO 1
+#define SUCESSO 0
 #define CRIADOR '0'
 #define COMPRADOR '1'
 #define DEPOSITO '2'
@@ -49,7 +50,7 @@ int canetas_solicitadas = 0;
 int canetas_enviadas = 0;
 char permissao_deposito = TRUE;
 char permissao_fabrica = TRUE;
-char solicitacao_comprador = '1';
+char solicitacao_comprador = COMPRADOR;
 
 // Mutexes do programa.
 
@@ -66,14 +67,6 @@ pthread_cond_t permissao_controle_fabrica = PTHREAD_COND_INITIALIZER;
 pthread_cond_t deposito_canetas_cheio = PTHREAD_COND_INITIALIZER;
 pthread_cond_t deposito_canetas_livre = PTHREAD_COND_INITIALIZER;
 pthread_cond_t solicitacao_compra_canetas = PTHREAD_COND_INITIALIZER;
-
-void imprime_solicitacao_compra() {
-    if(canetas_enviadas != 0) {
-        printf("%d caneta(s) comprada(s).\n", canetas_enviadas);
-     } else {
-        printf("Nao ha canetas em estoque no momento. Volte mais tarde!\n");
-     }
-}
 
 void* deposito_materia_prima(void *thread_args) {
     time_t tempo_inicial = time(NULL);
@@ -132,7 +125,7 @@ void *fabrica_canetas(void *thread_args) {
 }
 
 void *controle(void *thread_args) {
-
+    
     while(TRUE) {
 
         if(materia_deposito < 1 || espacos_disponiveis == 0) {
@@ -193,6 +186,7 @@ void *comprador(void *thread_args) {
     time_t tempo_inicial = time(NULL);
     
     while(TRUE) {
+        
         pthread_mutex_lock(&mutex_impressao_mensagem);
 
         // Enquanto não receber o alerta para iniciar o ciclo da compra,
@@ -214,6 +208,14 @@ void *comprador(void *thread_args) {
     }
 }
 
+void imprime_solicitacao_compra() {
+    if(canetas_enviadas != 0) {
+        printf("%d caneta(s) comprada(s).\n", canetas_enviadas);
+     } else {
+        printf("Nao ha canetas em estoque no momento. Volte mais tarde!\n");
+     }
+}
+
 int criador() {
     pthread_t t_deposito_materia_prima;
     pthread_t t_fabrica_canetas;
@@ -225,34 +227,39 @@ int criador() {
 
     if (pthread_create(&t_deposito_materia_prima, NULL, (void*) deposito_materia_prima, NULL) != 0){
         printf("Erro ao criar Thread! \n");
-        return ERRO;
+        fflush(0);
+		return ERRO;
     }
 
     if (pthread_create(&t_fabrica_canetas, NULL, (void*) fabrica_canetas, NULL) != 0){
         printf("Erro ao criar Thread! \n");
-        return ERRO;
+        fflush(0);
+		return ERRO;
     }
 
     if (pthread_create(&t_controle, NULL, (void*) controle, NULL) != 0){
         printf("Erro ao criar Thread! \n");
-        return ERRO;
+        fflush(0);
+		return ERRO;
     }
 
     if (pthread_create(&t_deposito_canetas, NULL, (void*) deposito_canetas, NULL) != 0){
         printf("Erro ao criar Thread! \n");
-        return ERRO;
+        fflush(0);
+		return ERRO;
     }
 
     if (pthread_create(&t_comprador_canetas, NULL, (void*) comprador, NULL) != 0){
         printf("Erro ao criar Thread! \n");
-        return ERRO;
+        fflush(0);
+		return ERRO;
     }
 
     while(resta_estoque) {
         pthread_mutex_lock(&mutex_impressao_mensagem);
 
         // Enquanto não receber os dados da compra, permanece
-        // bloqueado.
+        // em espera.
         while(solicitacao_comprador != CRIADOR) {
             pthread_cond_wait(&solicitacao_compra_canetas, &mutex_impressao_mensagem);
         }
@@ -261,17 +268,17 @@ int criador() {
 
         pthread_mutex_unlock(&mutex_impressao_mensagem);
 
-        // Acorda o comprador para iniciar o ciclo de compra.
+        // Alerta o comprador para iniciar o ciclo de compra.
         solicitacao_comprador = COMPRADOR;
         pthread_cond_broadcast(&solicitacao_compra_canetas);
     }
 
-    return 0;
+    return SUCESSO;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char **argv) {
 
-    if(argc == 8){
+    if(argc == 8) {
         estoque_materia_prima = atoi(argv[1]);
         materia_enviada_iteracao = atoi(argv[2]);
         tempo_materia_entrega = atoi(argv[3]);
@@ -279,7 +286,7 @@ int main(int argc, char *argv[]) {
         capacidade_desposito_canetas = atoi(argv[5]);
         canetas_compradadas_por_solicitacao = atoi(argv[6]);
         tempo_solicitacao_comprador =  atoi(argv[7]);
-    }else{
+    } else {
         printf("Erro no fornecimento de entradas \n");
         return 0;
     }
