@@ -22,8 +22,12 @@ execute o programa com ./exec
 #define resta_estoque (materia_deposito > 0 || materia_fabrica > 0 || canetas_deposito > 0)
 
 #define minimo(x, y) ((x > y) ? y : x)
-#define FALSE '0'
+#define FALSE '\0'
 #define TRUE '1'
+#define ERRO 1
+#define CRIADOR '0'
+#define COMPRADOR '1'
+#define DEPOSITO '2'
 
 // Variáveis de entrada.
 
@@ -43,7 +47,8 @@ int materia_fabrica = 0;
 int canetas_deposito = 0;
 int canetas_solicitadas = 0;
 int canetas_enviadas = 0;
-char permissao_controle = TRUE;
+char permissao_deposito = TRUE;
+char permissao_fabrica = TRUE;
 char solicitacao_comprador = '1';
 
 // Mutexes do programa.
@@ -56,18 +61,15 @@ pthread_mutex_t mutex_impressao_mensagem = PTHREAD_MUTEX_INITIALIZER;
 
 // Condições de execução das threads.
 
-pthread_cond_t permissao_controle_producao = PTHREAD_COND_INITIALIZER;
+pthread_cond_t permissao_controle_deposito = PTHREAD_COND_INITIALIZER;
+pthread_cond_t permissao_controle_fabrica = PTHREAD_COND_INITIALIZER;
 pthread_cond_t deposito_canetas_cheio = PTHREAD_COND_INITIALIZER;
 pthread_cond_t deposito_canetas_livre = PTHREAD_COND_INITIALIZER;
 pthread_cond_t solicitacao_compra_canetas = PTHREAD_COND_INITIALIZER;
 
 void imprime_solicitacao_compra() {
     if(canetas_enviadas != 0) {
-        if(canetas_solicitadas != 0) {
-            printf("%d caneta(s) comprada(s), resta(m) %d.\n", canetas_enviadas, canetas_solicitadas);
-        } else {
-            printf("%d caneta(s) comprada(s).\n", canetas_enviadas);
-        }
+        printf("%d caneta(s) comprada(s).\n", canetas_enviadas);
      } else {
         printf("Nao ha canetas em estoque no momento. Volte mais tarde!\n");
      }
@@ -76,15 +78,15 @@ void imprime_solicitacao_compra() {
 void* deposito_materia_prima(void *thread_args) {
     time_t tempo_inicial = time(NULL);
 
-    while(materia_deposito > 0) {
+    while(TRUE) {
         
         if(time(NULL) - tempo_inicial >= tempo_materia_entrega) {
             pthread_mutex_lock(&mutex_materia_fabrica);
 
             // Executa apenas caso haja a permissão do 
             // controle por meio de uma variável de condição.
-            while(permissao_controle == FALSE) {
-                pthread_cond_wait(&permissao_controle_producao, &mutex_materia_fabrica);
+            while(permissao_deposito == FALSE) {
+                pthread_cond_wait(&permissao_controle_deposito, &mutex_materia_fabrica);
             }
 
             pthread_mutex_lock(&mutex_materia_deposito);
@@ -98,14 +100,12 @@ void* deposito_materia_prima(void *thread_args) {
             tempo_inicial = time(NULL);
         }
     }
-
-    pthread_exit(NULL);
 }
 
 void *fabrica_canetas(void *thread_args) {
     time_t tempo_inicial;
 
-    while(materia_deposito > 0 || materia_fabrica > 0) {
+    while(TRUE) {
 
         if(materia_fabrica > 0) {
             tempo_inicial = time(NULL);
@@ -116,8 +116,8 @@ void *fabrica_canetas(void *thread_args) {
 
             // Executa apenas caso haja a permissão do 
             // controle por meio de uma variável de condição.
-            while(permissao_controle == FALSE) {
-                pthread_cond_wait(&permissao_controle_producao, &mutex_materia_fabrica);
+            while(permissao_fabrica == FALSE) {
+                pthread_cond_wait(&permissao_controle_fabrica, &mutex_materia_fabrica);
             }
 
             pthread_mutex_lock(&mutex_canetas_deposito);
@@ -129,59 +129,42 @@ void *fabrica_canetas(void *thread_args) {
             pthread_mutex_unlock(&mutex_materia_fabrica);
         }
     }
-
-    pthread_exit(NULL);
 }
 
 void *controle(void *thread_args) {
-    while(resta_estoque) {
-        pthread_mutex_lock(&mutex_espacos_disponiveis);
 
-        // Permanece bloqueada enquanto houverem espaços 
-        // livres no depósito de canetas.
-        while(espacos_disponiveis != 0) {
-            pthread_cond_wait(&deposito_canetas_livre, &mutex_espacos_disponiveis);
+    while(TRUE) {
+
+        if(materia_deposito < 1 || espacos_disponiveis == 0) {
+            permissao_deposito = FALSE;
+        } else {
+            permissao_deposito = TRUE;
+            pthread_cond_signal(&permissao_controle_deposito);
         }
 
-        // No momento em que todos os espaços do despósito são ocupados,
-        // bloqueia o depósito de matéria prima e a fábrica de canetas.
-        permissao_controle = FALSE;
-
-        // Permanece bloqueada enquanto não houverem espaços 
-        // livres no depósito de canetas.
-        while(espacos_disponiveis == 0) {
-            pthread_cond_wait(&deposito_canetas_cheio, &mutex_espacos_disponiveis);
+        if((materia_deposito < 1 && materia_fabrica < 1) || espacos_disponiveis == 0) {
+            permissao_fabrica = FALSE;
+        } else {
+            permissao_fabrica = TRUE;
+            pthread_cond_signal(&permissao_controle_fabrica);
         }
-
-        // No momento em que é liberado algum espaço no depósito,
-        // libera o depósito de matéria prima e a fábrica de canetas.
-        permissao_controle = TRUE;
-
-        pthread_cond_broadcast(&permissao_controle_producao);
-        pthread_mutex_unlock(&mutex_espacos_disponiveis);
     }
 }
 
 void *deposito_canetas(void *thread_args) {
 
-    while(resta_estoque) {
+    while(TRUE) {
 
         pthread_mutex_lock(&mutex_espacos_disponiveis);
 
         // Atualiza os espaços disponíveis a cada execução.
         espacos_disponiveis = capacidade_desposito_canetas - canetas_deposito;
 
-        // Caso não hajam espaços disponíveis, avise o 
-        // controle para o bloqueio.
-        if(espacos_disponiveis == 0) {
-            pthread_cond_broadcast(&deposito_canetas_livre);
-        }
-
         pthread_mutex_unlock(&mutex_espacos_disponiveis);
 
         // Caso o comprador tenha solicitado uma compra,
         // transfira as canetas.
-        if(solicitacao_comprador == '2') {
+        if(solicitacao_comprador == DEPOSITO) {
             pthread_mutex_lock(&mutex_canetas_deposito);
 
             if(canetas_deposito >= canetas_solicitadas) {
@@ -200,7 +183,7 @@ void *deposito_canetas(void *thread_args) {
             pthread_mutex_unlock(&mutex_impressao_mensagem);
 
             // Alerta o criador para imprimir os dados da compra.
-            solicitacao_comprador = '0';
+            solicitacao_comprador = CRIADOR;
             pthread_cond_broadcast(&solicitacao_compra_canetas);
         }
     }
@@ -209,31 +192,26 @@ void *deposito_canetas(void *thread_args) {
 void *comprador(void *thread_args) {
     time_t tempo_inicial = time(NULL);
     
-    while(resta_estoque) {
+    while(TRUE) {
         pthread_mutex_lock(&mutex_impressao_mensagem);
 
         // Enquanto não receber o alerta para iniciar o ciclo da compra,
         // permanece bloqueado.
-        while(solicitacao_comprador != '1') {
+        while(solicitacao_comprador != COMPRADOR) {
             pthread_cond_wait(&solicitacao_compra_canetas, &mutex_impressao_mensagem);
         }
 
         while(time(NULL) - tempo_inicial < tempo_solicitacao_comprador);
 
         // Solicita a compra.
-        if(canetas_solicitadas == 0) {
-            canetas_solicitadas = canetas_compradadas_por_solicitacao;
-        }
+        canetas_solicitadas = canetas_compradadas_por_solicitacao;
 
         // Solicita a transferência de canetas ao depósito e envia
         // os dados solicitados.
-        solicitacao_comprador = '2';
+        solicitacao_comprador = DEPOSITO;
 
         tempo_inicial = time(NULL);
     }
-
-    pthread_exit(NULL);
-
 }
 
 int criador() {
@@ -247,27 +225,27 @@ int criador() {
 
     if (pthread_create(&t_deposito_materia_prima, NULL, (void*) deposito_materia_prima, NULL) != 0){
         printf("Erro ao criar Thread! \n");
-        return 0;
+        return ERRO;
     }
 
     if (pthread_create(&t_fabrica_canetas, NULL, (void*) fabrica_canetas, NULL) != 0){
         printf("Erro ao criar Thread! \n");
-        return 0;
+        return ERRO;
     }
 
     if (pthread_create(&t_controle, NULL, (void*) controle, NULL) != 0){
         printf("Erro ao criar Thread! \n");
-        return 0;
+        return ERRO;
     }
 
     if (pthread_create(&t_deposito_canetas, NULL, (void*) deposito_canetas, NULL) != 0){
         printf("Erro ao criar Thread! \n");
-        return 0;
+        return ERRO;
     }
 
     if (pthread_create(&t_comprador_canetas, NULL, (void*) comprador, NULL) != 0){
         printf("Erro ao criar Thread! \n");
-        return 0;
+        return ERRO;
     }
 
     while(resta_estoque) {
@@ -275,7 +253,7 @@ int criador() {
 
         // Enquanto não receber os dados da compra, permanece
         // bloqueado.
-        while(solicitacao_comprador != '0') {
+        while(solicitacao_comprador != CRIADOR) {
             pthread_cond_wait(&solicitacao_compra_canetas, &mutex_impressao_mensagem);
         }
 
@@ -284,11 +262,11 @@ int criador() {
         pthread_mutex_unlock(&mutex_impressao_mensagem);
 
         // Acorda o comprador para iniciar o ciclo de compra.
-        solicitacao_comprador = '1';
+        solicitacao_comprador = COMPRADOR;
         pthread_cond_broadcast(&solicitacao_compra_canetas);
     }
 
-    return 1;
+    return 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -309,9 +287,5 @@ int main(int argc, char *argv[]) {
     materia_deposito = estoque_materia_prima;
     espacos_disponiveis = capacidade_desposito_canetas;
 
-    if(criador() == 0) {
-        return printf("Erro ao executar o criador.\n"), 0;
-    }
-
-    return 0;
+    exit(criador());
 }
