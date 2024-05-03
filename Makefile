@@ -1,5 +1,5 @@
 all: 
-	gcc -o exec fabrica_entrada.c -lpthread
+	gcc -o exec fabrica.c -lpthread
 
 run: all
 	@echo -e "\nExecucao 1 - Argumentos (25, 2, 2, 3, 10, 2, 5)\n"
