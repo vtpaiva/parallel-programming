@@ -8,8 +8,7 @@ run:
 clean:
 	rm exec
 
-exemplos: 
-	all
+exemplos: all
 	@echo -e "\nExecucao 1 - Argumentos (25, 5, 1, 1, 10, 12, 8)\n"
 	./exec 25 5 1 1 10 12 8
 	@echo -e "\nExecucao 2 - Argumentos (50, 15, 1, 1, 5, 5, 2)\n"
