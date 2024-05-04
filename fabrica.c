@@ -11,10 +11,22 @@ Oliver Kenzo Kobayashi - 13676930
 Rodrigo Rodrigues de Castro - 13695362
 Vitor Augusto Paiva de Brito - 13732303
 
-gcc -o exec fabrica.c -lpthread
+Compilação:
+"gcc -o exec fabrica.c -lpthread"
 
-Após o programa ser compilada pela linha de compilação acima,
-execute o programa com ./exec
+Execução:
+Após o programa ser compilado pela linha de compilação acima,
+execute o programa informando as entradas na ordem do documento,
+como no modelo:
+
+./exec materia_prima_existente materia materia_enviada_iteracao tempo_materia_entrega 
+       tempo_fabricacao_caneta capacidade_desposito_canetas canetas_compradadas_por_solicitacao 
+       tempo_solicitacao_comprador
+
+(Em uma única linha)
+
+Para executar os exemplos já feitos, execute "make exemplos" 
+ou "make run" para uma execução única do programa.
 
 */
 
@@ -40,7 +52,7 @@ int capacidade_desposito_canetas;
 int canetas_compradadas_por_solicitacao;
 int tempo_solicitacao_comprador;
 
-// Variáveis globais de condições e quantidades da fábrica.
+// Variáveis universais para intercâmbio de dados entre threads.
 
 int materia_deposito;
 int espacos_disponiveis;
@@ -127,6 +139,8 @@ void *controle(void *thread_args) {
     while(TRUE) {
         pthread_mutex_lock(&mutex_espacos_disponiveis);
 
+        // Caso não hajam espaços disponíveis no depósito de canetas,
+        // bloqueia o envio de matéria prima e a produção de canetas.
         if(espacos_disponiveis == 0) {
             permissao_controle = FALSE;
         } else {
@@ -211,6 +225,8 @@ void imprime_solicitacao_compra() {
 }
 
 int criador() {
+    int total_canetas_compradas = 0;
+
     pthread_t t_deposito_materia_prima;
     pthread_t t_fabrica_canetas;
     pthread_t t_controle;
@@ -222,31 +238,31 @@ int criador() {
     if (pthread_create(&t_deposito_materia_prima, NULL, (void*) deposito_materia_prima, NULL) != 0){
         printf("Erro ao criar thread Deposito de materia prima! \n");
         fflush(0);
-		return ERRO;
+	return ERRO;
     }
 
     if (pthread_create(&t_fabrica_canetas, NULL, (void*) fabrica_canetas, NULL) != 0){
         printf("Erro ao criar thread fabrica de canetas! \n");
         fflush(0);
-		return ERRO;
+	return ERRO;
     }
 
     if (pthread_create(&t_controle, NULL, (void*) controle, NULL) != 0){
         printf("Erro ao criar thread controle! \n");
         fflush(0);
-		return ERRO;
+	return ERRO;
     }
 
     if (pthread_create(&t_deposito_canetas, NULL, (void*) deposito_canetas, NULL) != 0){
         printf("Erro ao criar thread deposito de canetas! \n");
         fflush(0);
-		return ERRO;
+	return ERRO;
     }
 
     if (pthread_create(&t_comprador_canetas, NULL, (void*) comprador, NULL) != 0){
         printf("Erro ao criar thread comprador de canetas! \n");
         fflush(0);
-		return ERRO;
+	return ERRO;
     }
 
     while(resta_estoque) {
@@ -260,12 +276,16 @@ int criador() {
 
         imprime_solicitacao_compra();
 
+        total_canetas_compradas += canetas_enviadas;
+
         pthread_mutex_unlock(&mutex_impressao_mensagem);
 
         // Alerta o comprador para iniciar o ciclo de compra.
         solicitacao_comprador = COMPRADOR;
         pthread_cond_broadcast(&solicitacao_compra_canetas);
     }
+
+    printf("Total de caneta(s) comprada(s): %d\n", total_canetas_compradas);
 
     return SUCESSO;
 }
@@ -282,7 +302,7 @@ int main(int argc, char **argv) {
         tempo_solicitacao_comprador =  atoi(argv[7]);
     } else {
         printf("Erro no fornecimento de entradas \n");
-        return 0;
+        exit(ERRO);
     }
     
     materia_deposito = estoque_materia_prima;
