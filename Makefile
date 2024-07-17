@@ -1,20 +1,20 @@
 all:
-	gcc -o exec fabrica.c -lpthread
+	gcc -o exec factory.c -lpthread
 
 run:
-	@echo -e "\nExemplo - Argumentos (25, 5, 2, 2, 10, 2, 3)\n"
+	@echo -e "\nExample - Arguments (25, 5, 2, 2, 10, 2, 3)\n"
 	./exec 25 5 2 2 10 2 3
 
-exemplos: all
-	@echo -e "\nExecucao 1 - Argumentos (25, 5, 1, 1, 10, 12, 8)\n"
+examples: all
+	@echo -e "\nExample 1 - Arguments (25, 5, 1, 1, 10, 12, 8)\n"
 	./exec 25 5 1 1 10 12 8
-	@echo -e "\nExecucao 2 - Argumentos (15, 2, 2, 2, 7, 3, 2)\n"
+	@echo -e "\nExample 2 - Arguments (15, 2, 2, 2, 7, 3, 2)\n"
 	./exec 15 2 2 2 7 3 2
-	@echo -e "\nExecucao 3 - Argumentos (50, 15, 1, 1, 5, 5, 5)\n"
+	@echo -e "\nExample 3 - Arguments (50, 15, 1, 1, 5, 5, 5)\n"
 	./exec 50 15 1 1 5 5 5
-	@echo -e "\nExecucao 4 - Argumentos (44, 7, 2, 3, 5, 10, 10)\n"
+	@echo -e "\nExample 4 - Arguments (44, 7, 2, 3, 5, 10, 10)\n"
 	./exec 44 7 2 3 5 10 10
-	@echo -e "\nExecucao 5 - Argumentos (60, 19, 2, 1, 1, 12, 3)\n"
+	@echo -e "\nExample 5 - Arguments (60, 19, 2, 1, 1, 12, 3)\n"
 	./exec 60 19 2 1 1 12 3
 
 clean:
