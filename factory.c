@@ -2,45 +2,18 @@
 #include <stdlib.h>
 #include <pthread.h>
 
-/*
-
-Group 6
-André Jacob Suaide - 13864673
-Marcus Vinicius da Silva - 13833150
-Oliver Kenzo Kobayashi - 13676930
-Rodrigo Rodrigues de Castro - 13695362
-Vitor Augusto Paiva de Brito - 13732303
-
-Compilation:
-"gcc -o exec factory.c -lpthread"
-
-Execution:
-After the program is compiled by the above compilation line,
-run the program informing the entries in the document order,
-as in the model:
-
-./exec materia_prima_existente materia materia_enviada_iteracao tempo_materia_entrega 
-       tempo_fabricacao_caneta capacidade_desposito_canetas canetas_compradadas_por_solicitacao 
-       tempo_solicitacao_comprador
-
-To run the already made examples, run "make examples"
-or "make run" for a single run of the program.
-
-(The rest of the code is made in Portuguese)
-
-*/
-
 // Condição que determina se o programa ainda deve executar.
 #define resta_estoque (materia_deposito > 0 || materia_fabrica > 0 || canetas_deposito > 0)
 
 #define minimo(x, y) ((x > y) ? y : x)
-#define FALSE '\0'
-#define TRUE '1'
-#define ERRO 1
-#define SUCESSO 0
-#define CRIADOR '0'
-#define COMPRADOR '1'
-#define DEPOSITO '2'
+
+const char FALSE = '\0';
+const char TRUE = '1';
+const int ERRO =  1;
+const int SUCESSO = 0;
+const char CRIADOR = '0';
+const char COMPRADOR = '1';
+const char DEPOSITO = '2';
 
 // Variáveis de entrada.
 
@@ -143,7 +116,7 @@ void *controle(void *thread_args) {
         // bloqueia o envio de matéria prima e a produção de canetas.
         if(espacos_disponiveis == 0) {
             permissao_controle = FALSE;
-        } else {
+        } else if(permissao_controle != TRUE) {
             permissao_controle = TRUE;
             pthread_cond_broadcast(&permissao_controle_execucao);
         }
